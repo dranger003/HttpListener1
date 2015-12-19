@@ -1,5 +1,5 @@
 ﻿@{
-    var a = "Hello from RazorEngine!";
+    var url = "https://www.youtube.com/watch?v=RllJtOw0USI&vq=hd1080";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -11,7 +11,9 @@
     <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
 </head>
 <body>
-    <p>@a</p>
+    <div class="embed-responsive embed-responsive-16by9">
+	    <iframe class="embed-responsive-item" src="@url"></iframe>
+	</div>    
     <script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
     <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </body>
