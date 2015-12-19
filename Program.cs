@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Security;
 using System.Security.Permissions;
@@ -37,9 +38,31 @@ namespace HttpListener1
                 return result;
             }
 
+            Console.WriteLine("Now running secondary AppDomain.");
+
             using (var listener = new HttpListener())
             {
-                listener.Prefixes.Add("http://localhost:12345/");
+                var count = 0;
+
+                foreach (var address in Dns.GetHostAddresses(""))
+                {
+                    if (address.AddressFamily == AddressFamily.InterNetwork)
+                    {
+                        var url = String.Format("http://{0}:12345/", address);
+
+                        listener.Prefixes.Add(url);
+                        Console.WriteLine("Listening on {0}...", url);
+
+                        ++count;
+                    }
+                }
+
+                if (count == 0)
+                {
+                     Console.WriteLine("No IPv4 address detected.");
+                     return 1;
+                }
+
                 listener.Start();
 
                 var context = listener.GetContext();
