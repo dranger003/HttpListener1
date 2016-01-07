@@ -66,26 +66,52 @@ namespace HttpListener1
                 {
                     var context = listener.GetContext();
 
-                    var request = context.Request;
-                    var response = context.Response;
-
-                    Console.WriteLine("{0}", request.RawUrl);
-
-                    if (request.RawUrl == "/")
+                    using (var response = context.Response)
                     {
-                        using (var reader = new StreamReader(File.OpenRead("index.cshtml")))
+                        var request = context.Request;
+                        Console.WriteLine("{0}", request.RawUrl);
+
+                        if (request.RawUrl == "/")
                         {
                             response.ContentEncoding = Encoding.UTF8;
                             response.ContentType = "text/html";
 
-                            using (var writer = new StreamWriter(response.OutputStream, response.ContentEncoding))
-                                writer.Write(RazorEngine.Engine.Razor.RunCompile(reader.ReadToEnd(), "templateKey", null, new { Title = "HttpListener1" }));
+                            using (var reader = new StreamReader(File.OpenRead("index.cshtml")))
+                            {
+                                using (var writer = new StreamWriter(response.OutputStream, response.ContentEncoding))
+                                {
+                                    writer.Write(
+                                        RazorEngine.Engine.Razor.RunCompile(
+                                            reader.ReadToEnd(),
+                                            "templateKey",
+                                            null,
+                                            new
+                                            {
+                                                Title = "HttpListener1"
+                                            }
+                                        )
+                                    );
+                                }
+                            }
                         }
-                    }
-                    else
-                    {
-                        response.StatusCode = 404;
-                        response.Close();
+                        else if (request.RawUrl == "/sse")
+                        {
+                            response.ContentEncoding = Encoding.UTF8;
+                            response.ContentType = "text/event-stream";
+
+                            var writer = new StreamWriter(response.OutputStream, response.ContentEncoding);
+                            writer.Write("data: Testing!\n\n");
+                            writer.Flush();
+                        }
+                        else
+                        {
+                            response.ContentEncoding = Encoding.UTF8;
+                            response.ContentType = "text/html";
+                            response.StatusCode = 404;
+
+                            using (var writer = new StreamWriter(response.OutputStream, response.ContentEncoding))
+                                writer.Write("404 Not Found");
+                        }
                     }
                 }
             }
