@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -14,75 +16,79 @@ namespace HttpListener1
 {
     class Program
     {
+        static int SwitchDomain(AppDomain primary)
+        {
+            var setup = new AppDomainSetup();
+            setup.ApplicationBase = primary.SetupInformation.ApplicationBase;
+
+            var secondary = AppDomain.CreateDomain(
+                "SecondaryDomain",
+                null,
+                primary.SetupInformation,
+                new PermissionSet(PermissionState.Unrestricted),
+                new StrongName[0]
+            );
+
+            var result = secondary.ExecuteAssembly(Assembly.GetExecutingAssembly().Location);
+            AppDomain.Unload(secondary);
+
+            return result;
+        }
+
         static int Main(string[] args)
         {
-            var domain0 = AppDomain.CurrentDomain;
-            if (domain0.IsDefaultAppDomain())
+            var domain = AppDomain.CurrentDomain;
+            if (domain.IsDefaultAppDomain())
             {
-                Console.WriteLine("Spawning secondary AppDomain...");
-
-                var setup = new AppDomainSetup();
-                setup.ApplicationBase = domain0.SetupInformation.ApplicationBase;
-
-                var domain1 = AppDomain.CreateDomain(
-                    "Domain1",
-                    null,
-                    domain0.SetupInformation,
-                    new PermissionSet(PermissionState.Unrestricted),
-                    new StrongName[0]
-                );
-
-                var result = domain1.ExecuteAssembly(Assembly.GetExecutingAssembly().Location);
-                AppDomain.Unload(domain1);
-
-                return result;
+                Console.WriteLine("Switching to secondary AppDomain...");
+                return SwitchDomain(domain);
             }
 
-            Console.WriteLine("Now running secondary AppDomain.");
+            Console.WriteLine("Now running in secondary AppDomain.\n");
+
+            var addresses = new List<IPAddress>();
+            addresses.Add(IPAddress.Loopback);
+            addresses.AddRange(Dns.GetHostAddresses("").Where(x => x.AddressFamily == AddressFamily.InterNetwork));
 
             using (var listener = new HttpListener())
             {
-                var count = 0;
-
-                foreach (var address in Dns.GetHostAddresses(""))
+                foreach (var address in addresses)
                 {
-                    if (address.AddressFamily == AddressFamily.InterNetwork)
-                    {
-                        var url = String.Format("http://{0}:12345/", address);
-
-                        listener.Prefixes.Add(url);
-                        Console.WriteLine("Listening on {0}...", url);
-
-                        ++count;
-                    }
-                }
-
-                if (count == 0)
-                {
-                     Console.WriteLine("No IPv4 address detected.");
-                     return 1;
+                    var url = String.Format("http://{0}:12345/", address);
+                    listener.Prefixes.Add(url);
+                    Console.WriteLine("{0}", url);
                 }
 
                 listener.Start();
+                Console.WriteLine();
 
-                var context = listener.GetContext();
+                while (true)
+                {
+                    var context = listener.GetContext();
 
-                var request = context.Request;
-                Console.WriteLine(request.Url);
+                    var request = context.Request;
+                    var response = context.Response;
 
-                var html = "";
-                using (var reader = new StreamReader(File.OpenRead("index.cshtml")))
-                    html = RazorEngine.Engine.Razor.RunCompile(reader.ReadToEnd(), "templateKey", null, new { Title = "HttpListener1" });
+                    Console.WriteLine("{0}", request.RawUrl);
 
-                var data = Encoding.UTF8.GetBytes(html);
-                var response = context.Response;
-                response.ContentLength64 = data.Length;
+                    if (request.RawUrl == "/")
+                    {
+                        using (var reader = new StreamReader(File.OpenRead("index.cshtml")))
+                        {
+                            response.ContentEncoding = Encoding.UTF8;
+                            response.ContentType = "text/html";
 
-                using (var stream = response.OutputStream)
-                    stream.Write(data, 0, data.Length);
+                            using (var writer = new StreamWriter(response.OutputStream, response.ContentEncoding))
+                                writer.Write(RazorEngine.Engine.Razor.RunCompile(reader.ReadToEnd(), "templateKey", null, new { Title = "HttpListener1" }));
+                        }
+                    }
+                    else
+                    {
+                        response.StatusCode = 404;
+                        response.Close();
+                    }
+                }
             }
-
-            Console.ReadKey(true);
 
             return 0;
         }
